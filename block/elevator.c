@@ -560,7 +560,7 @@ static struct elevator_type *elevator_get_default(struct request_queue *q)
 	    !blk_mq_is_shared_tags(q->tag_set->flags))
 		return NULL;
 
-	return elevator_find_get("mq-deadline");
+	return elevator_find_get("bfq");
 }
 
 /*
