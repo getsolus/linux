@@ -1634,8 +1634,6 @@ int aa_label_snxprint(char *str, size_t size, struct aa_ns *ns,
 
 	if (AA_DEBUG_LABEL && (flags & FLAG_ABS_ROOT)) {
 		ns = root_ns;
-		len = snprintf(str, size, "_");
-		update_for_len(total, len, size, str);
 	} else if (!ns) {
 		ns = labels_ns(label);
 	}
