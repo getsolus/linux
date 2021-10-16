@@ -2192,8 +2192,8 @@ config FB_HYPERV
 
 config FB_SIMPLE
 	tristate "Simple framebuffer support"
-	depends on FB
-	depends on !DRM_SIMPLEDRM
+	bool "Simple framebuffer support"
+	depends on (FB = y) && !DRM_SIMPLEDRM
 	select APERTURE_HELPERS
 	select FB_CFB_FILLRECT
 	select FB_CFB_COPYAREA
