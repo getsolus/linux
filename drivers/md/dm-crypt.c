@@ -3143,6 +3143,9 @@ static int crypt_ctr_optional(struct dm_target *ti, unsigned int argc, char **ar
 		}
 	}
 
+set_bit(DM_CRYPT_NO_READ_WORKQUEUE, &cc->flags);
+set_bit(DM_CRYPT_NO_WRITE_WORKQUEUE, &cc->flags);
+
 	return 0;
 }
 
