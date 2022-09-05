@@ -1091,6 +1091,8 @@ static const struct ctl_table swap_sysctl_table[] = {
  */
 void __init swap_setup(void)
 {
+	/* Only swap-in pages requested, avoid readahead */
+	page_cluster = 0;
 	unsigned long megs = totalram_pages() >> (20 - PAGE_SHIFT);
 
 	/* Use a smaller cluster for small-memory machines */
