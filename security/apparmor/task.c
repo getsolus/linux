@@ -301,3 +301,48 @@ int aa_may_ptrace(const struct cred *tracer_cred, struct aa_label *tracer,
 			profile_tracee_perm(tracee_cred, profile, tracer,
 					    xrequest, &sa));
 }
+
+/* call back to audit ptrace fields */
+static void audit_ns_cb(struct audit_buffer *ab, void *va)
+{
+	struct common_audit_data *sa = va;
+	struct apparmor_audit_data *ad = aad(sa);
+
+	if (ad->request & AA_USERNS_CREATE)
+		audit_log_format(ab, " requested=\"userns_create\"");
+
+	if (ad->denied & AA_USERNS_CREATE)
+		audit_log_format(ab, " denied=\"userns_create\"");
+}
+
+int aa_profile_ns_perm(struct aa_profile *profile,
+		       struct apparmor_audit_data *ad,
+		       u32 request)
+{
+	struct aa_perms perms = { };
+
+	ad->request = request;
+
+	if (profile_unconfined(profile)) {
+		if (!unprivileged_userns_restricted ||
+		    ns_capable_noaudit(current_user_ns(), CAP_SYS_ADMIN))
+			return 0;
+
+		ad->info = "User namespace creation restricted";
+		/* don't just return: allow complain mode to override */
+	} else {
+		struct aa_ruleset *rules = list_first_entry(&profile->rules,
+							    typeof(*rules),
+							    list);
+		aa_state_t state;
+
+		state = RULE_MEDIATES(rules, ad->class);
+		if (!state)
+			/* TODO: add flag to complain about unmediated */
+			return 0;
+		perms = *aa_lookup_perms(&rules->policy, state);
+	}
+
+	aa_apply_modes_to_perms(profile, &perms);
+	return aa_check_perms(profile, &perms, request, ad, audit_ns_cb);
+}
