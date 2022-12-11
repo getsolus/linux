@@ -177,3 +177,5 @@ obj-$(CONFIG_ASUS_ALLY_HID)  += asus-ally-hid/
 obj-$(CONFIG_SURFACE_HID_CORE)  += surface-hid/
 
 obj-$(CONFIG_INTEL_THC_HID)     += intel-thc-hid/
+
+obj-$(CONFIG_HID_IPTS)          += ipts/
