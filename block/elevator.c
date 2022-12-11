@@ -640,7 +640,11 @@ static struct elevator_type *elevator_get_default(struct request_queue *q)
 
 	if (q->nr_hw_queues != 1 &&
 	    !blk_mq_is_shared_tags(q->tag_set->flags))
-		return NULL;
+#if defined(CONFIG_MQ_IOSCHED_KYBER)
+		return elevator_get(q, "kyber", false);
+#else
+		return elevator_get(q, "mq-deadline", false);
+#endif
 
 #if defined(CONFIG_IOSCHED_BFQ)
 	return elevator_get(q, "bfq", false);
