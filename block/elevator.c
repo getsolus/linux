@@ -566,7 +566,11 @@ static struct elevator_type *elevator_get_default(struct request_queue *q)
 
 	if (q->nr_hw_queues != 1 &&
 	    !blk_mq_is_shared_tags(q->tag_set->flags))
+#if defined(CONFIG_MQ_IOSCHED_KYBER)
+		return elevator_find_get("kyber");
+#else
 		return NULL;
+#endif
 
 	return elevator_find_get("bfq");
 }
