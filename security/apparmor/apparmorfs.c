@@ -2602,6 +2602,8 @@ static struct aa_sfs_entry aa_sfs_entry_unconfined[] = {
 	AA_SFS_FILE_INTPTR("userns",		unprivileged_userns_restricted),
 	AA_SFS_FILE_INTPTR("change_profile",
 			    aa_unprivileged_unconfined_restricted),
+	AA_SFS_FILE_INTPTR("io_uring",
+			    aa_unprivileged_uring_restricted),
 	{ }
 };
 
@@ -2651,6 +2653,12 @@ static struct aa_sfs_entry aa_sfs_entry_query[] = {
 	AA_SFS_DIR("label",			aa_sfs_entry_query_label),
 	{ }
 };
+
+static struct aa_sfs_entry aa_sfs_entry_io_uring[] = {
+	AA_SFS_FILE_STRING("mask", "sqpoll override_creds"),
+	{ }
+};
+
 static struct aa_sfs_entry aa_sfs_entry_features[] = {
 	AA_SFS_DIR("policy",			aa_sfs_entry_policy),
 	AA_SFS_DIR("domain",			aa_sfs_entry_domain),
@@ -2667,6 +2675,7 @@ static struct aa_sfs_entry aa_sfs_entry_features[] = {
 	AA_SFS_DIR("signal",			aa_sfs_entry_signal),
 	AA_SFS_DIR("dbus",			aa_sfs_entry_dbus),
 	AA_SFS_DIR("query",			aa_sfs_entry_query),
+	AA_SFS_DIR("io_uring",			aa_sfs_entry_io_uring),
 	{ }
 };
 
