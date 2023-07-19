@@ -1095,7 +1095,6 @@ static void apparmor_sk_free_security(struct sock *sk)
 	aa_put_label(ctx->label);
 	aa_put_label(ctx->peer);
 	path_put(&ctx->path);
-	kfree(ctx);
 }
 
 /**
