@@ -153,7 +153,7 @@ static unsigned int normalized_sysctl_sched_wakeup_granularity	= 1000000UL;
 const_debug unsigned int sysctl_sched_migration_cost	= 500000UL;
 
 #ifdef CONFIG_SCHED_BORE
-unsigned int __read_mostly sched_bore                  = 1;
+unsigned int __read_mostly sched_bore                  = 0;
 unsigned int __read_mostly sched_bore_extra_flags      = 0;
 unsigned int __read_mostly sched_burst_cache_lifetime  = 60000000;
 unsigned int __read_mostly sched_burst_penalty_offset  = 22;
