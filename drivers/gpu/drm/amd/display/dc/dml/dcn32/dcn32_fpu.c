@@ -808,6 +808,10 @@ static bool subvp_drr_schedulable(struct dc *dc, struct dc_state *context)
 	struct dc_stream_state *phantom_stream;
 	bool subvp_found = false;
 	bool drr_found = false;
+	const struct dc_config *config = &dc->config;
+
+	if (config->disable_subvp_drr)
+		return false;
 
 	// Find SubVP pipe
 	for (i = 0; i < dc->res_pool->pipe_count; i++) {
