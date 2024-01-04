@@ -151,6 +151,9 @@ struct apparmor_audit_data {
 					kuid_t fsuid;
 					kuid_t ouid;
 				} mq;
+				struct {
+					const char *target;
+				} ns;
 			};
 		};
 		struct {
