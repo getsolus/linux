@@ -126,7 +126,8 @@ static ssize_t pending_reboot_show(struct kobject *kobj,
 static struct kobj_attribute pending_reboot = __ATTR_RO(pending_reboot);
 
 static bool asus_bios_requires_reboot(struct kobj_attribute *attr) {
-	return !strcmp(attr->attr.name, "gpu_mux_mode");
+	return !strcmp(attr->attr.name, "gpu_mux_mode") ||
+		!strcmp(attr->attr.name, "panel_hd_mode");
 }
 
 /*
@@ -445,6 +446,7 @@ ATTR_GROUP_ENUM_INT_RO(charge_mode, "charge_mode", ASUS_WMI_DEVID_CHARGE_MODE, 0
 ATTR_GROUP_BOOL_RW(boot_sound, "boot_sound", ASUS_WMI_DEVID_BOOT_SOUND, "Set the boot POST sound");
 ATTR_GROUP_BOOL_RW(mcu_powersave, "mcu_powersave", ASUS_WMI_DEVID_MCU_POWERSAVE, "Set MCU powersaving mode");
 ATTR_GROUP_BOOL_RW(panel_od, "panel_overdrive", ASUS_WMI_DEVID_PANEL_OD, "Set the panel refresh overdrive");
+ATTR_GROUP_BOOL_RW(panel_hd_mode, "panel_hd_mode", ASUS_WMI_DEVID_PANEL_HD, "Set the panel HD mode to UHD<0> or FHD<1>");
 ATTR_GROUP_BOOL_RO(egpu_connected, "egpu_connected", ASUS_WMI_DEVID_EGPU_CONNECTED, "Show the eGPU connection status");
 
 static int asus_fw_attr_add(void)
@@ -533,6 +535,9 @@ static int asus_fw_attr_add(void)
 		sysfs_create_group(&asus_bios.fw_attr_kset->kobj, &mcu_powersave_attr_group);
 	if (asus_wmi_is_present(ASUS_WMI_DEVID_PANEL_OD))
 		sysfs_create_group(&asus_bios.fw_attr_kset->kobj, &panel_od_attr_group);
+	if (asus_wmi_is_present(ASUS_WMI_DEVID_PANEL_HD))
+		sysfs_create_group(&asus_bios.fw_attr_kset->kobj, &panel_hd_mode_attr_group);
+
 
 	return 0;
 
