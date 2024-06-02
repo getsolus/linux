@@ -42,6 +42,18 @@ MODULE_ALIAS("wmi:"ASUS_NB_WMI_EVENT_GUID);
 #define ASUS_MINI_LED_2024_STRONG	0x01
 #define ASUS_MINI_LED_2024_OFF		0x02
 
+enum cpu_core_type {
+	CPU_CORE_PERF = 0,
+	CPU_CORE_POWER,
+};
+
+enum cpu_core_value {
+	CPU_CORE_DEFAULT = 0,
+	CPU_CORE_MIN,
+	CPU_CORE_MAX,
+	CPU_CORE_CURRENT,
+};
+
 /* Default limits for tunables available on ASUS ROG laptops */
 #define PPT_CPU_LIMIT_MIN	5
 #define PPT_CPU_LIMIT_MAX	150
@@ -76,6 +88,10 @@ struct rog_tunables {
 	u32 nv_temp_default;
 	u32 nv_temp_max;
 	u32 nv_temp_target;
+
+	u32 min_perf_cores;
+	u32 max_perf_cores;
+	u32 max_power_cores;
 };
 
 static const struct class *fw_attr_class;
@@ -539,6 +555,185 @@ static ssize_t apu_mem_possible_values_show(struct kobject *kobj,
 }
 ATTR_GROUP_ENUM_CUSTOM(apu_mem, "apu_mem", "Set the available system memory for the APU to use");
 
+static int asus_bios_set_max_cores(void)
+{
+	u32 cores;
+	int err;
+
+	asus_bios.rog_tunables->min_perf_cores = 4;
+	asus_bios.rog_tunables->max_perf_cores = 4;
+	asus_bios.rog_tunables->max_power_cores = 8;
+
+	err = asus_wmi_get_devstate_dsts(ASUS_WMI_DEVID_CORES_MAX, &cores);
+	if (err)
+		return err;
+
+	cores &= ~ASUS_WMI_DSTS_PRESENCE_BIT;
+	asus_bios.rog_tunables->max_power_cores = (cores & 0xff00) >> 8;
+	asus_bios.rog_tunables->max_perf_cores = cores & 0xff;
+
+	return 0;
+}
+
+static ssize_t cores_value_show(struct kobject *kobj,
+					struct kobj_attribute *attr, char *buf,
+					enum cpu_core_type core_type,
+					enum cpu_core_value core_value)
+{
+	u32 cores;
+	int err;
+
+	switch (core_value) {
+	case CPU_CORE_DEFAULT:
+	case CPU_CORE_MAX:
+		if (core_type == CPU_CORE_PERF)
+			return sysfs_emit(buf, "%d\n", asus_bios.rog_tunables->max_perf_cores);
+		else
+			return sysfs_emit(buf, "%d\n", asus_bios.rog_tunables->max_power_cores);
+	case CPU_CORE_MIN:
+		if (core_type == CPU_CORE_PERF)
+			return sysfs_emit(buf, "%d\n", asus_bios.rog_tunables->min_perf_cores);
+		else
+			return sysfs_emit(buf, "%d\n", 0);
+	default:
+	break;
+	}
+
+	err = asus_wmi_get_devstate_dsts(ASUS_WMI_DEVID_CORES, &cores);
+	if (err)
+		return err;
+
+	cores &= ~ASUS_WMI_DSTS_PRESENCE_BIT;
+	if (core_type == CPU_CORE_PERF)
+		cores &= 0xff;
+	else
+		cores = (cores & 0xff00) >> 8;
+	return sysfs_emit(buf, "%d\n", cores);
+}
+
+static ssize_t cores_current_value_store(struct kobject *kobj,
+				struct kobj_attribute *attr, const char *buf,
+				enum cpu_core_type core_type)
+{
+	int result, err;
+	u32 cores, currentv, min, max;
+
+	result = kstrtou32(buf, 10, &cores);
+	if (result)
+		return result;
+
+	if (core_type == CPU_CORE_PERF) {
+		min = asus_bios.rog_tunables->min_perf_cores;
+		max = asus_bios.rog_tunables->max_perf_cores;
+	} else {
+		min = 0;
+		max = asus_bios.rog_tunables->max_power_cores;
+	}
+	if (cores < min || cores > max)
+		return -EINVAL;
+
+	err = asus_wmi_get_devstate_dsts(ASUS_WMI_DEVID_CORES, &currentv);
+	if (err)
+		return err;
+
+	if (core_type == CPU_CORE_PERF)
+		cores |= (currentv & 0xff00);
+	else
+		cores |= currentv & 0xff;
+
+	if (cores == currentv)
+		return 0;
+
+	err = asus_wmi_set_devstate(ASUS_WMI_DEVID_CORES, cores, &result);
+	if (err) {
+		pr_warn("Failed to set perfromance core count: %d\n", err);
+		return err;
+	}
+
+	if (result > 1) {
+		pr_warn("Failed to set performance core count (result): 0x%x\n", result);
+		return -EIO;
+	}
+
+	pr_info("CPU core count changed, reboot required\n");
+	sysfs_notify(kobj, NULL, attr->attr.name);
+	asus_set_reboot_and_signal_event();
+
+	return 0;
+}
+
+static ssize_t cores_performance_min_value_show(struct kobject *kobj,
+					struct kobj_attribute *attr, char *buf)
+{
+	return cores_value_show(kobj, attr, buf, CPU_CORE_PERF, CPU_CORE_MIN);
+}
+
+static ssize_t cores_performance_max_value_show(struct kobject *kobj,
+					struct kobj_attribute *attr, char *buf)
+{
+	return cores_value_show(kobj, attr, buf, CPU_CORE_PERF, CPU_CORE_MAX);
+}
+
+static ssize_t cores_performance_default_value_show(struct kobject *kobj,
+					struct kobj_attribute *attr, char *buf)
+{
+	return cores_value_show(kobj, attr, buf, CPU_CORE_PERF, CPU_CORE_DEFAULT);
+}
+
+static ssize_t cores_performance_current_value_show(struct kobject *kobj,
+					struct kobj_attribute *attr, char *buf)
+{
+	return cores_value_show(kobj, attr, buf, CPU_CORE_PERF, CPU_CORE_CURRENT);
+}
+
+static ssize_t cores_performance_current_value_store(struct kobject *kobj,
+					struct kobj_attribute *attr,
+					const char *buf, size_t count)
+{
+	int err = cores_current_value_store(kobj, attr, buf, CPU_CORE_PERF);
+	if (err)
+		return err;
+
+	return count;
+}
+ATTR_GROUP_CORES_RW(cores_performance, "cores_performance", ASUS_WMI_DEVID_CORES, "Set the max available performance cores");
+
+static ssize_t cores_efficiency_min_value_show(struct kobject *kobj,
+					struct kobj_attribute *attr, char *buf)
+{
+	return cores_value_show(kobj, attr, buf, CPU_CORE_POWER, CPU_CORE_MIN);
+}
+
+static ssize_t cores_efficiency_max_value_show(struct kobject *kobj,
+					struct kobj_attribute *attr, char *buf)
+{
+	return cores_value_show(kobj, attr, buf, CPU_CORE_POWER, CPU_CORE_MAX);
+}
+
+static ssize_t cores_efficiency_default_value_show(struct kobject *kobj,
+					struct kobj_attribute *attr, char *buf)
+{
+	return cores_value_show(kobj, attr, buf, CPU_CORE_POWER, CPU_CORE_DEFAULT);
+}
+
+static ssize_t cores_efficiency_current_value_show(struct kobject *kobj,
+					struct kobj_attribute *attr, char *buf)
+{
+	return cores_value_show(kobj, attr, buf, CPU_CORE_POWER, CPU_CORE_CURRENT);
+}
+
+static ssize_t cores_efficiency_current_value_store(struct kobject *kobj,
+					struct kobj_attribute *attr,
+					const char *buf, size_t count)
+{
+	int err = cores_current_value_store(kobj, attr, buf, CPU_CORE_POWER);
+	if (err)
+		return err;
+
+	return count;
+}
+ATTR_GROUP_CORES_RW(cores_efficiency, "cores_efficiency", ASUS_WMI_DEVID_CORES, "Set the max available efficiency cores");
+
 /* Simple attribute creation */
 ATTR_GROUP_ENUM_INT_RW(thermal_policy, "thermal_policy", ASUS_WMI_DEVID_THROTTLE_THERMAL_POLICY, 0, 3, "0;1;2", "Fan stuff todo");
 ATTR_GROUP_PPT_RW(ppt_pl1_spl, "ppt_pl1_spl", ASUS_WMI_DEVID_PPT_PL1_SPL,
@@ -627,8 +822,14 @@ static int asus_fw_attr_add(void)
 	if (asus_wmi_is_present(ASUS_WMI_DEVID_EGPU_CONNECTED))
 		sysfs_create_group(&asus_bios.fw_attr_kset->kobj, &egpu_connected_attr_group);
 
+	if (asus_wmi_is_present(ASUS_WMI_DEVID_CORES_MAX) && !asus_bios_set_max_cores()){
+			sysfs_create_group(&asus_bios.fw_attr_kset->kobj, &cores_performance_attr_group);
+			sysfs_create_group(&asus_bios.fw_attr_kset->kobj, &cores_efficiency_attr_group);
+		}
+
 	if (asus_wmi_is_present(ASUS_WMI_DEVID_THROTTLE_THERMAL_POLICY))
 		sysfs_create_group(&asus_bios.fw_attr_kset->kobj, &thermal_policy_attr_group);
+
 	if (asus_wmi_is_present(ASUS_WMI_DEVID_PPT_PL1_SPL))
 		sysfs_create_group(&asus_bios.fw_attr_kset->kobj, &ppt_pl1_spl_attr_group);
 	if (asus_wmi_is_present(ASUS_WMI_DEVID_PPT_PL2_SPPT))
