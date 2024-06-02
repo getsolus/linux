@@ -53,6 +53,7 @@ MODULE_ALIAS("wmi:"ASUS_NB_WMI_EVENT_GUID);
 #define NVIDIA_BOOST_MAX	25
 #define NVIDIA_TEMP_MIN		75
 #define NVIDIA_TEMP_MAX		87
+#define NVIDIA_GPU_POWER_MAX	70
 
 /* Tunables provided by ASUS for gaming laptops */
 struct rog_tunables {
@@ -441,6 +442,9 @@ ATTR_GROUP_PPT_RW(nv_dynamic_boost, "nv_dynamic_boost", ASUS_WMI_DEVID_NV_DYN_BO
 		nv_boost_default, 5, nv_boost_max, 1, "Set the Nvidia dynamic boost limit");
 ATTR_GROUP_PPT_RW(nv_temp_target, "nv_temp_target", ASUS_WMI_DEVID_NV_THERM_TARGET,
 		nv_temp_default, 75, nv_temp_max, 1, "Set the Nvidia max thermal limit");
+ATTR_GROUP_INT_VALUE_ONLY_RO(dgpu_base_tgp, "dgpu_base_tgp", ASUS_WMI_DEVID_DGPU_BASE_TGP, "Read the base TGP value")
+ATTR_GROUP_INT_RW(dgpu_tgp, "dgpu_tgp", ASUS_WMI_DEVID_DGPU_SET_TGP,
+		70, 0, NVIDIA_GPU_POWER_MAX, 1, "Set the additional TGP on top of the base TGP");
 
 ATTR_GROUP_ENUM_INT_RO(charge_mode, "charge_mode", ASUS_WMI_DEVID_CHARGE_MODE, 0, 0, "0;1;2", "Show the current mode of charging");
 ATTR_GROUP_BOOL_RW(boot_sound, "boot_sound", ASUS_WMI_DEVID_BOOT_SOUND, "Set the boot POST sound");
@@ -526,6 +530,10 @@ static int asus_fw_attr_add(void)
 			sysfs_create_group(&asus_bios.fw_attr_kset->kobj, &nv_dynamic_boost_attr_group);
 	if (asus_wmi_is_present(ASUS_WMI_DEVID_NV_THERM_TARGET))
 			sysfs_create_group(&asus_bios.fw_attr_kset->kobj, &nv_temp_target_attr_group);
+	if (asus_wmi_is_present(ASUS_WMI_DEVID_DGPU_BASE_TGP))
+			sysfs_create_group(&asus_bios.fw_attr_kset->kobj, &dgpu_base_tgp_attr_group);
+	if (asus_wmi_is_present(ASUS_WMI_DEVID_DGPU_SET_TGP))
+			sysfs_create_group(&asus_bios.fw_attr_kset->kobj, &dgpu_tgp_attr_group);
 
 	if (asus_wmi_is_present(ASUS_WMI_DEVID_CHARGE_MODE))
 		sysfs_create_group(&asus_bios.fw_attr_kset->kobj, &charge_mode_attr_group);
