@@ -10,6 +10,8 @@
 #include <linux/pci_hotplug.h>
 #include <linux/platform_profile.h>
 
+#define FAN_CURVE_POINTS		8
+
 /*
  * <platform>/    - debugfs root directory
  *   dev_id      - current dev_id
@@ -32,13 +34,13 @@ struct asus_rfkill {
 	u32 dev_id;
 };
 
+#define FAN_CURVE_POINTS		8
+
 enum fan_type {
 	FAN_TYPE_NONE = 0,
 	FAN_TYPE_AGFN,		/* deprecated on newer platforms */
 	FAN_TYPE_SPEC83,	/* starting in Spec 8.3, use CPU_FAN_CTRL */
 };
-
-#define FAN_CURVE_POINTS		8
 
 struct fan_curve_data {
 	bool enabled;
@@ -97,11 +99,12 @@ struct asus_wmi {
 	u8 fan_boost_mode_mask;
 	u8 fan_boost_mode;
 
+
+	/* Tunables provided by ASUS for gaming laptops */
+#if IS_ENABLED(CONFIG_ASUS_WMI_DEPRECATED_ATTRS)
 	bool egpu_enable_available;
 	bool dgpu_disable_available;
 	u32 gpu_mux_dev;
-
-	/* Tunables provided by ASUS for gaming laptops */
 	u32 ppt_pl2_sppt;
 	u32 ppt_pl1_spl;
 	u32 ppt_apu_sppt;
@@ -109,6 +112,9 @@ struct asus_wmi {
 	u32 ppt_fppt;
 	u32 nv_dynamic_boost;
 	u32 nv_temp_target;
+	bool panel_overdrive_available;
+	u32 mini_led_dev_id;
+#endif /* IS_ENABLED(CONFIG_ASUS_WMI_DEPRECATED_ATTRS) */
 
 	u32 kbd_rgb_dev;
 	bool kbd_rgb_state_available;
@@ -126,9 +132,6 @@ struct asus_wmi {
 
 	// The RSOC controls the maximum charging percentage.
 	bool battery_rsoc_available;
-
-	bool panel_overdrive_available;
-	u32 mini_led_dev_id;
 
 	struct hotplug_slot hotplug_slot;
 	struct mutex hotplug_lock;
