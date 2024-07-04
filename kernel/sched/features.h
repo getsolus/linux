@@ -5,8 +5,34 @@
  * sleep+wake cycles. EEVDF placement strategy #1, #2 if disabled.
  */
 SCHED_FEAT(PLACE_LAG, true)
+/*
+ * Give new tasks half a slice to ease into the competition.
+ */
 SCHED_FEAT(PLACE_DEADLINE_INITIAL, true)
-SCHED_FEAT(RUN_TO_PARITY, true)
+/*
+ * Give waken tasks half a slice to ease into the competition.
+ */
+#ifdef CONFIG_SCHED_BORE
+SCHED_FEAT(PLACE_DEADLINE_WAKEUP, true)
+#else // !CONFIG_SCHED_BORE
+SCHED_FEAT(PLACE_DEADLINE_WAKEUP, false)
+#endif // CONFIG_SCHED_BORE
+/*
+ * Inhibit (wakeup) preemption until the current task has exhausted its slice.
+ */
+#ifdef CONFIG_SCHED_BORE
+SCHED_FEAT(RESPECT_SLICE, false)
+#else // !CONFIG_SCHED_BORE
+SCHED_FEAT(RESPECT_SLICE, true)
+#endif // CONFIG_SCHED_BORE
+/*
+ * Relax RESPECT_SLICE to allow preemption once current has reached 0-lag.
+ */
+SCHED_FEAT(RUN_TO_PARITY, false)
+/*
+ * Allow tasks with a shorter slice to disregard RESPECT_SLICE
+ */
+SCHED_FEAT(PREEMPT_SHORT, true)
 
 /*
  * Prefer to schedule the task we woke last (assuming it failed
