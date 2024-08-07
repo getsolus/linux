@@ -1907,6 +1907,7 @@ static void ally_schedule_work(struct ally_rgb_leds *led)
 static void ally_led_do_brightness(struct work_struct *work)
 {
 	struct ally_rgb_leds *led = container_of(work, struct ally_rgb_leds, work);
+	u8 buf1[] = { FEATURE_ROG_ALLY_REPORT_ID, 0xb4, 0x00, 0x00, 0x00 };
 	u8 buf[] = { FEATURE_ROG_ALLY_REPORT_ID, 0xba, 0xc5, 0xc4, 0x00 };
 	unsigned long flags;
 
@@ -1920,6 +1921,8 @@ static void ally_led_do_brightness(struct work_struct *work)
 	spin_unlock_irqrestore(&led->lock, flags);
 
 	if (asus_dev_set_report(led->hdev, buf, sizeof(buf)) < 0)
+		hid_err(led->hdev, "Ally failed to set backlight\n");
+	if (asus_dev_set_report(led->hdev, buf1, sizeof(buf1)) < 0)
 		hid_err(led->hdev, "Ally failed to set backlight\n");
 }
 
