@@ -53,9 +53,9 @@ MODULE_DESCRIPTION("Asus HID Keyboard and TouchPad");
 #define FEATURE_KBD_LED_REPORT_ID1 0x5d
 #define FEATURE_KBD_LED_REPORT_ID2 0x5e
 
-#define ROG_ALLY_REPORT_SIZE 64
-#define ROG_ALLY_X_MIN_MCU 313
-#define ROG_ALLY_MIN_MCU 319
+#define ROG_ALLY_CFG_INTF_IN 0x83
+#define ROG_ALLY_CFG_INTF_OUT 0x04
+#define ROG_ALLY_X_INTF_IN 0x87
 
 #define SUPPORT_KBD_BACKLIGHT BIT(0)
 
@@ -540,110 +540,9 @@ static bool asus_kbd_wmi_led_control_present(struct hid_device *hdev)
 	return !!(value & ASUS_WMI_DSTS_PRESENCE_BIT);
 }
 
-/*
- * We don't care about any other part of the string except the version section.
- * Example strings: FGA80100.RC72LA.312_T01, FGA80100.RC71LS.318_T01
- * The bytes "5a 05 03 31 00 1a 13" and possibly more come before the version
- * string, and there may be additional bytes after the version string such as
- * "75 00 74 00 65 00" or a postfix such as "_T01"
- */
-static int mcu_parse_version_string(const u8 *response, size_t response_size)
-{
-	const u8 *end = response + response_size;
-	const u8 *p = response;
-	int dots, err, version;
-	char buf[4];
-
-	dots = 0;
-	while (p < end && dots < 2) {
-		if (*p++ == '.')
-			dots++;
-	}
-
-	if (dots != 2 || p >= end || (p + 3) >= end)
-		return -EINVAL;
-
-	memcpy(buf, p, 3);
-	buf[3] = '\0';
-
-	err = kstrtoint(buf, 10, &version);
-	if (err || version < 0)
-		return -EINVAL;
-
-	return version;
-}
-
-static int mcu_request_version(struct hid_device *hdev)
-{
-	u8 *response __free(kfree) = kzalloc(ROG_ALLY_REPORT_SIZE, GFP_KERNEL);
-	const u8 request[] = { 0x5a, 0x05, 0x03, 0x31, 0x00, 0x20 };
-	int ret;
-
-	if (!response)
-		return -ENOMEM;
-
-	ret = asus_kbd_set_report(hdev, request, sizeof(request));
-	if (ret < 0)
-		return ret;
-
-	ret = hid_hw_raw_request(hdev, FEATURE_REPORT_ID, response,
-				ROG_ALLY_REPORT_SIZE, HID_FEATURE_REPORT,
-				HID_REQ_GET_REPORT);
-	if (ret < 0)
-		return ret;
-
-	ret = mcu_parse_version_string(response, ROG_ALLY_REPORT_SIZE);
-	if (ret < 0) {
-		pr_err("Failed to parse MCU version: %d\n", ret);
-		print_hex_dump(KERN_ERR, "MCU: ", DUMP_PREFIX_NONE,
-			      16, 1, response, ROG_ALLY_REPORT_SIZE, false);
-	}
-
-	return ret;
-}
-
-static void validate_mcu_fw_version(struct hid_device *hdev, int idProduct)
-{
-	int min_version, version;
-	struct asus_wmi *asus;
-	struct device *dev;
-
-	version = mcu_request_version(hdev);
-	if (version < 0)
-		return;
-
-	switch (idProduct) {
-	case USB_DEVICE_ID_ASUSTEK_ROG_NKEY_ALLY:
-		min_version = ROG_ALLY_MIN_MCU;
-		break;
-	case USB_DEVICE_ID_ASUSTEK_ROG_NKEY_ALLY_X:
-		min_version = ROG_ALLY_X_MIN_MCU;
-		break;
-	default:
-		min_version = 0;
-	}
-
-	if (version < min_version) {
-		hid_warn(hdev,
-			"The MCU firmware version must be %d or greater to avoid issues with suspend.\n",
-			min_version);
-		/* Get the asus platform device */
-		dev = bus_find_device_by_name(&platform_bus_type, NULL, "asus-nb-wmi");
-		if (dev) {
-			asus = dev_get_drvdata(dev);
-			/* Do not show the powersave attribute if MCU version too low */
-			if (asus)
-				asus->mcu_powersave_available = false;
-			put_device(dev);
-		}
-	}
-}
-
 static int asus_kbd_register_leds(struct hid_device *hdev)
 {
 	struct asus_drvdata *drvdata = hid_get_drvdata(hdev);
-	struct usb_interface *intf;
-	struct usb_device *udev;
 	unsigned char kbd_func;
 	int ret;
 
@@ -667,14 +566,6 @@ static int asus_kbd_register_leds(struct hid_device *hdev)
 			if (ret < 0)
 				return ret;
 		}
-
-		if (drvdata->quirks & QUIRK_ROG_ALLY_XPAD) {
-			intf = to_usb_interface(hdev->dev.parent);
-			udev = interface_to_usbdev(intf);
-			validate_mcu_fw_version(hdev,
-				le16_to_cpu(udev->descriptor.idProduct));
-		}
-
 	} else {
 		/* Initialize keyboard */
 		ret = asus_kbd_init(hdev, FEATURE_KBD_REPORT_ID);
@@ -1146,6 +1037,17 @@ static int asus_probe(struct hid_device *hdev, const struct hid_device_id *id)
 	hid_set_drvdata(hdev, drvdata);
 
 	drvdata->quirks = id->driver_data;
+
+	/* Ignore these endpoints as they are used by hid-asus-ally */
+	if (drvdata->quirks & QUIRK_ROG_ALLY_XPAD) {
+		struct usb_interface *intf = to_usb_interface(hdev->dev.parent);
+		struct usb_host_endpoint *ep = intf->cur_altsetting->endpoint;
+
+		if (ep->desc.bEndpointAddress == ROG_ALLY_X_INTF_IN ||
+			ep->desc.bEndpointAddress == ROG_ALLY_CFG_INTF_IN ||
+			ep->desc.bEndpointAddress == ROG_ALLY_CFG_INTF_OUT)
+			return -ENODEV;
+	}
 
 	/*
 	 * T90CHI's keyboard dock returns same ID values as T100CHI's dock.
