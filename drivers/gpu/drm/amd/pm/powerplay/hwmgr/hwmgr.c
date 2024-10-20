@@ -459,7 +459,7 @@ int hwmgr_set_user_specify_caps(struct pp_hwmgr *hwmgr)
 			PHM_PlatformCaps_CAC);
 	}
 
-	if (hwmgr->feature_mask & PP_OVERDRIVE_MASK)
+	if ((hwmgr->feature_mask & PP_OVERDRIVE_MASK) || amdgpu_overdrive_enabled)
 		hwmgr->od_enabled = true;
 
 	return 0;
