@@ -4527,7 +4527,7 @@ int amdgpu_pm_sysfs_init(struct amdgpu_device *adev)
 		ret = amdgpu_od_set_init(adev);
 		if (ret)
 			goto err_out1;
-	} else if (adev->pm.pp_feature & PP_OVERDRIVE_MASK) {
+	} else if ((adev->pm.pp_feature & PP_OVERDRIVE_MASK) || amdgpu_overdrive_enabled) {
 		dev_info(adev->dev, "overdrive feature is not supported\n");
 	}
 

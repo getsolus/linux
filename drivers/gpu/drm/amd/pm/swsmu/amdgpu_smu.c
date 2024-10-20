@@ -664,7 +664,7 @@ static int smu_set_funcs(struct amdgpu_device *adev)
 {
 	struct smu_context *smu = adev->powerplay.pp_handle;
 
-	if (adev->pm.pp_feature & PP_OVERDRIVE_MASK)
+	if ((adev->pm.pp_feature & PP_OVERDRIVE_MASK) || amdgpu_overdrive_enabled)
 		smu->od_enabled = true;
 
 	switch (amdgpu_ip_version(adev, MP1_HWIP, 0)) {

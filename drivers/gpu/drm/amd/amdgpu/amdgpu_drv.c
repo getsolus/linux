@@ -135,6 +135,7 @@ enum AMDGPU_DEBUG_MASK {
 };
 
 unsigned int amdgpu_vram_limit = UINT_MAX;
+int amdgpu_overdrive_enabled = 0;
 int amdgpu_vis_vram_limit;
 int amdgpu_gart_size = -1; /* auto */
 int amdgpu_gtt_size = -1; /* auto */
@@ -247,6 +248,13 @@ struct amdgpu_watchdog_timer amdgpu_watchdog_timer = {
 	.timeout_fatal_disable = false,
 	.period = 0x0, /* default to 0x0 (timeout disable) */
 };
+
+/**
+ * DOC: overdrive_enabled (int)
+ * Alternate method to enable AMDGPU overclocking. The default is 0 (Disabled).
+ */
+MODULE_PARM_DESC(overdrive_enabled, "amdgpu overdrive enable (0 = disable)");
+module_param_named(overdrive_enabled, amdgpu_overdrive_enabled, int, 0444);
 
 /**
  * DOC: vramlimit (int)
