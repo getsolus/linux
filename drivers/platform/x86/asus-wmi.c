@@ -198,136 +198,6 @@ struct agfn_fan_args {
 	u32 speed;		/* read: RPM/100 - write: 0-255 */
 } __packed;
 
-/*
- * <platform>/    - debugfs root directory
- *   dev_id      - current dev_id
- *   ctrl_param  - current ctrl_param
- *   method_id   - current method_id
- *   devs        - call DEVS(dev_id, ctrl_param) and print result
- *   dsts        - call DSTS(dev_id)  and print result
- *   call        - call method_id(dev_id, ctrl_param) and print result
- */
-struct asus_wmi_debug {
-	struct dentry *root;
-	u32 method_id;
-	u32 dev_id;
-	u32 ctrl_param;
-};
-
-struct asus_rfkill {
-	struct asus_wmi *asus;
-	struct rfkill *rfkill;
-	u32 dev_id;
-};
-
-enum fan_type {
-	FAN_TYPE_NONE = 0,
-	FAN_TYPE_AGFN,		/* deprecated on newer platforms */
-	FAN_TYPE_SPEC83,	/* starting in Spec 8.3, use CPU_FAN_CTRL */
-};
-
-struct fan_curve_data {
-	bool enabled;
-	u32 device_id;
-	u8 temps[FAN_CURVE_POINTS];
-	u8 percents[FAN_CURVE_POINTS];
-};
-
-struct asus_wmi {
-	int dsts_id;
-	int spec;
-	int sfun;
-
-	struct input_dev *inputdev;
-	struct backlight_device *backlight_device;
-	struct backlight_device *screenpad_backlight_device;
-	struct platform_device *platform_device;
-
-	struct led_classdev wlan_led;
-	int wlan_led_wk;
-	struct led_classdev tpd_led;
-	int tpd_led_wk;
-	struct led_classdev kbd_led;
-	int kbd_led_wk;
-	struct led_classdev lightbar_led;
-	int lightbar_led_wk;
-	struct led_classdev micmute_led;
-	struct led_classdev camera_led;
-	struct workqueue_struct *led_workqueue;
-	struct work_struct tpd_led_work;
-	struct work_struct wlan_led_work;
-	struct work_struct lightbar_led_work;
-
-	struct asus_rfkill wlan;
-	struct asus_rfkill bluetooth;
-	struct asus_rfkill wimax;
-	struct asus_rfkill wwan3g;
-	struct asus_rfkill gps;
-	struct asus_rfkill uwb;
-
-	int tablet_switch_event_code;
-	u32 tablet_switch_dev_id;
-	bool tablet_switch_inverted;
-
-	enum fan_type fan_type;
-	enum fan_type gpu_fan_type;
-	enum fan_type mid_fan_type;
-	int fan_pwm_mode;
-	int gpu_fan_pwm_mode;
-	int mid_fan_pwm_mode;
-	int agfn_pwm;
-
-	bool fan_boost_mode_available;
-	u8 fan_boost_mode_mask;
-	u8 fan_boost_mode;
-
-	bool egpu_enable_available;
-	bool dgpu_disable_available;
-	u32 gpu_mux_dev;
-
-	/* Tunables provided by ASUS for gaming laptops */
-	u32 ppt_pl2_sppt;
-	u32 ppt_pl1_spl;
-	u32 ppt_apu_sppt;
-	u32 ppt_platform_sppt;
-	u32 ppt_fppt;
-	u32 nv_dynamic_boost;
-	u32 nv_temp_target;
-
-	u32 kbd_rgb_dev;
-	bool kbd_rgb_state_available;
-	bool oobe_state_available;
-
-	u8 throttle_thermal_policy_mode;
-	u32 throttle_thermal_policy_dev;
-
-	bool cpu_fan_curve_available;
-	bool gpu_fan_curve_available;
-	bool mid_fan_curve_available;
-	struct fan_curve_data custom_fan_curves[3];
-
-	struct platform_profile_handler platform_profile_handler;
-	bool platform_profile_support;
-
-	// The RSOC controls the maximum charging percentage.
-	bool battery_rsoc_available;
-
-	bool panel_overdrive_available;
-	u32 mini_led_dev_id;
-
-	struct hotplug_slot hotplug_slot;
-	struct mutex hotplug_lock;
-	struct mutex wmi_lock;
-	struct workqueue_struct *hotplug_workqueue;
-	struct work_struct hotplug_work;
-
-	bool fnlock_locked;
-
-	struct asus_wmi_debug debug;
-
-	struct asus_wmi_driver *driver;
-};
-
 /* WMI ************************************************************************/
 
 static int asus_wmi_evaluate_method3(u32 method_id,
@@ -1853,16 +1723,6 @@ static int asus_wmi_led_init(struct asus_wmi *asus)
 
 		rv = led_classdev_register(&asus->platform_device->dev,
 						&asus->camera_led);
-		if (rv)
-			goto error;
-	}
-
-	if (asus->oobe_state_available) {
-		/*
-		 * Disable OOBE state, so that e.g. the keyboard backlight
-		 * works.
-		 */
-		rv = asus_wmi_set_devstate(ASUS_WMI_DEVID_OOBE, 1, NULL);
 		if (rv)
 			goto error;
 	}
@@ -4512,7 +4372,7 @@ static umode_t asus_sysfs_is_visible(struct kobject *kobj,
 	else if (attr == &dev_attr_nv_temp_target.attr)
 		devid = ASUS_WMI_DEVID_NV_THERM_TARGET;
 	else if (attr == &dev_attr_mcu_powersave.attr)
-		devid = ASUS_WMI_DEVID_MCU_POWERSAVE;
+		ok = asus->mcu_powersave_available;
 	else if (attr == &dev_attr_boot_sound.attr)
 		devid = ASUS_WMI_DEVID_BOOT_SOUND;
 	else if (attr == &dev_attr_panel_od.attr)
@@ -4772,7 +4632,7 @@ static int asus_wmi_add(struct platform_device *pdev)
 	asus->egpu_enable_available = asus_wmi_dev_is_present(asus, ASUS_WMI_DEVID_EGPU);
 	asus->dgpu_disable_available = asus_wmi_dev_is_present(asus, ASUS_WMI_DEVID_DGPU);
 	asus->kbd_rgb_state_available = asus_wmi_dev_is_present(asus, ASUS_WMI_DEVID_TUF_RGB_STATE);
-	asus->oobe_state_available = asus_wmi_dev_is_present(asus, ASUS_WMI_DEVID_OOBE);
+	asus->mcu_powersave_available = asus_wmi_dev_is_present(asus, ASUS_WMI_DEVID_MCU_POWERSAVE);
 
 	if (asus_wmi_dev_is_present(asus, ASUS_WMI_DEVID_MINI_LED_MODE))
 		asus->mini_led_dev_id = ASUS_WMI_DEVID_MINI_LED_MODE;
@@ -4996,13 +4856,6 @@ static int asus_hotk_restore(struct device *device)
 	}
 	if (!IS_ERR_OR_NULL(asus->kbd_led.dev))
 		kbd_led_update(asus);
-	if (asus->oobe_state_available) {
-		/*
-		 * Disable OOBE state, so that e.g. the keyboard backlight
-		 * works.
-		 */
-		asus_wmi_set_devstate(ASUS_WMI_DEVID_OOBE, 1, NULL);
-	}
 
 	if (asus_wmi_has_fnlock_key(asus))
 		asus_wmi_fnlock_update(asus);
