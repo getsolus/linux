@@ -82,6 +82,8 @@ struct rog_tunables {
 	u32 nv_tgp;
 };
 
+static const struct class *fw_attr_class;
+
 struct asus_armoury_priv {
 	struct device *fw_attr_dev;
 	struct kset *fw_attr_kset;
@@ -812,8 +814,13 @@ static int asus_fw_attr_add(void)
 	const char *name;
 	int err, i;
 
-	asus_armoury.fw_attr_dev = device_create(&firmware_attributes_class, NULL, MKDEV(0, 0),
+	err = fw_attributes_class_get(&fw_attr_class);
+	if (err)
+		return err;
+
+	asus_armoury.fw_attr_dev = device_create(fw_attr_class, NULL, MKDEV(0, 0),
 						NULL, "%s", DRIVER_NAME);
+
 	if (IS_ERR(asus_armoury.fw_attr_dev)) {
 		err = PTR_ERR(asus_armoury.fw_attr_dev);
 		goto fail_class_get;
@@ -928,8 +935,9 @@ err_remove_file:
 err_destroy_kset:
 	kset_unregister(asus_armoury.fw_attr_kset);
 err_destroy_classdev:
+	device_destroy(fw_attr_class, MKDEV(0, 0));
 fail_class_get:
-	device_destroy(&firmware_attributes_class, MKDEV(0, 0));
+	fw_attributes_class_put();
 	return err;
 }
 
@@ -1065,7 +1073,8 @@ static void __exit asus_fw_exit(void)
 
 	sysfs_remove_file(&asus_armoury.fw_attr_kset->kobj, &pending_reboot.attr);
 	kset_unregister(asus_armoury.fw_attr_kset);
-	device_destroy(&firmware_attributes_class, MKDEV(0, 0));
+	device_destroy(fw_attr_class, MKDEV(0, 0));
+	fw_attributes_class_put();
 
 	mutex_unlock(&asus_armoury.mutex);
 }
